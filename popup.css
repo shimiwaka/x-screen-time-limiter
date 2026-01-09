@@ -180,3 +180,95 @@ h2 {
   padding: 16px;
   font-style: italic;
 }
+
+/* 時間別詳細のスタイル */
+.history-item {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.history-item:hover {
+  background-color: #f7f9fa;
+}
+
+.expand-icon {
+  margin-left: auto;
+  margin-right: 8px;
+  font-size: 12px;
+  color: #999;
+  transition: transform 0.2s;
+}
+
+.hourly-details {
+  background-color: #f7f9fa;
+  padding: 12px;
+  border-left: 3px solid #1DA1F2;
+  margin-bottom: 8px;
+}
+
+.hourly-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  font-weight: 600;
+  font-size: 13px;
+  color: #666;
+}
+
+.delete-hours-btn {
+  padding: 4px 8px;
+  background-color: #DC2626;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.delete-hours-btn:hover {
+  background-color: #b91c1c;
+}
+
+.hourly-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.hourly-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background-color: white;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.hour-checkbox {
+  cursor: pointer;
+}
+
+.hour-range {
+  font-weight: 500;
+  color: #666;
+  min-width: 100px;
+}
+
+.hour-time {
+  margin-left: auto;
+  font-weight: 600;
+  color: #1DA1F2;
+}
+
+.legacy-notice {
+  padding: 8px;
+  color: #999;
+  font-size: 13px;
+  font-style: italic;
+  text-align: center;
+}

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "X Screen Time Limiter",
-  "version": "1.0.0",
-  "description": "X (Twitter) の閲覧時間を制限する拡張機能",
+  "version": "1.1.0",
+  "description": "X (Twitter) の閲覧時間を制限する拡張機能（時間帯別記録対応）",
   "permissions": [
     "storage",
     "tabs",

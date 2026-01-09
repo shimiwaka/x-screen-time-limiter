@@ -31,6 +31,14 @@ function getWeekday(dateString) {
   return weekdays[date.getDay()];
 }
 
+// 今日の日付を取得 (YYYY-MM-DD形式、日本時間基準)
+function getTodayKey() {
+  const now = new Date();
+  const jstOffset = 9 * 60 * 60 * 1000;
+  const jstDate = new Date(now.getTime() + jstOffset);
+  return jstDate.toISOString().split('T')[0];
+}
+
 // 統計情報を計算して表示
 async function displayStats() {
   const result = await chrome.storage.local.get(['usage', 'dailyLimit']);
@@ -47,7 +55,14 @@ async function displayStats() {
     return;
   }
 
-  const totalSeconds = dates.reduce((sum, date) => sum + usage[date], 0);
+  const totalSeconds = dates.reduce((sum, date) => {
+    const dayData = usage[date];
+    if (Array.isArray(dayData)) {
+      return sum + dayData.reduce((s, v) => s + v, 0);
+    } else {
+      return sum + dayData; // レガシー
+    }
+  }, 0);
   const avgSeconds = Math.floor(totalSeconds / totalDays);
 
   document.getElementById('totalDays').textContent = `${totalDays}日`;
@@ -83,7 +98,14 @@ async function displayHistory() {
   const maxSeconds = Math.max(...Object.values(usage), dailyLimit * 60);
 
   sortedDates.forEach(date => {
-    const seconds = usage[date];
+    let seconds = 0;
+    const dayData = usage[date];
+    if (Array.isArray(dayData)) {
+      seconds = dayData.reduce((sum, val) => sum + val, 0);
+    } else {
+      seconds = dayData; // レガシー
+    }
+
     const minutes = Math.floor(seconds / 60);
     const dailyLimitSeconds = dailyLimit * 60;
     const isOverLimit = seconds > dailyLimitSeconds;

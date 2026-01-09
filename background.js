@@ -12,6 +12,14 @@ function getTodayKey() {
   return jstDate.toISOString().split('T')[0];
 }
 
+// 現在の時刻（JST）の時間を取得 (0-23)
+function getCurrentHourJST() {
+  const now = new Date();
+  const jstOffset = 9 * 60 * 60 * 1000; // 9時間をミリ秒に変換
+  const jstDate = new Date(now.getTime() + jstOffset);
+  return jstDate.getUTCHours();
+}
+
 // URLがXのページかチェック
 function isXUrl(url) {
   if (!url) return false;
@@ -21,19 +29,32 @@ function isXUrl(url) {
 // 使用時間を1秒増やす
 async function incrementUsage() {
   const today = getTodayKey();
+  const currentHour = getCurrentHourJST();
   const result = await chrome.storage.local.get(['usage']);
   const usage = result.usage || {};
 
-  usage[today] = (usage[today] || 0) + 1;
+  // 配列の初期化
+  if (!usage[today]) {
+    usage[today] = new Array(24).fill(0);
+  }
+
+  // 配列でない場合は初期化（安全性のため）
+  if (!Array.isArray(usage[today])) {
+    usage[today] = new Array(24).fill(0);
+  }
+
+  // 現在の時間帯をインクリメント
+  usage[today][currentHour] = (usage[today][currentHour] || 0) + 1;
 
   await chrome.storage.local.set({ usage });
 
-  // コンテンツスクリプトに更新を通知
+  // コンテンツスクリプトには日別合計を送信
+  const todayTotal = usage[today].reduce((sum, val) => sum + val, 0);
   if (currentTabId) {
     try {
       await chrome.tabs.sendMessage(currentTabId, {
         type: 'UPDATE_TIMER',
-        usage: usage[today]
+        usage: todayTotal
       });
     } catch (error) {
       // タブが閉じられた場合などはエラーを無視
@@ -125,7 +146,13 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 });
 
 // 拡張機能がインストールされた時の初期設定
-chrome.runtime.onInstalled.addListener(async () => {
+chrome.runtime.onInstalled.addListener(async (details) => {
+  // アップデートの場合は既存データを削除
+  if (details.reason === 'update') {
+    await chrome.storage.local.set({ usage: {} });
+    console.log('時間別記録に更新 - 既存データ削除');
+  }
+
   const result = await chrome.storage.local.get(['dailyLimit']);
 
   // デフォルトの制限時間を設定 (60分)
@@ -145,7 +172,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const result = await chrome.storage.local.get(['dailyLimit', 'usage']);
       const dailyLimit = result.dailyLimit || 60;
       const usage = result.usage || {};
-      const todayUsage = usage[today] || 0;
+
+      let todayUsage = 0;
+      if (usage[today]) {
+        if (Array.isArray(usage[today])) {
+          todayUsage = usage[today].reduce((sum, val) => sum + val, 0);
+        } else {
+          todayUsage = usage[today]; // レガシーフォールバック
+        }
+      }
 
       sendResponse({
         dailyLimit: dailyLimit * 60, // 秒に変換
