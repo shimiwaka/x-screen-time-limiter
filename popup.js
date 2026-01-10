@@ -212,6 +212,9 @@ async function saveDailyLimit() {
 
 // イベントリスナーを設定
 document.addEventListener('DOMContentLoaded', () => {
+  // ポップアップが開いていることをbackground.jsに通知
+  const port = chrome.runtime.connect({ name: 'popup' });
+
   updateUsageDisplay();
   updateHistoryDisplay();
 
@@ -229,15 +232,4 @@ document.addEventListener('DOMContentLoaded', () => {
     e.preventDefault();
     chrome.tabs.create({ url: chrome.runtime.getURL('history.html') });
   });
-
-  // 1秒ごとに使用状況を更新
-  setInterval(updateUsageDisplay, 1000);
-});
-
-// ストレージの変更を監視
-chrome.storage.onChanged.addListener((changes, namespace) => {
-  if (namespace === 'local' && changes.usage) {
-    updateUsageDisplay();
-    updateHistoryDisplay();
-  }
 });

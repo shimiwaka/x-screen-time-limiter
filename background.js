@@ -2,6 +2,7 @@ let isXTabActive = false;
 let currentTabId = null;
 let countInterval = null;
 let isSystemIdle = false; // システムがアイドル/スリープ状態かどうか
+let isPopupOpen = false; // ポップアップが開いているかどうか
 
 // 今日の日付を取得 (YYYY-MM-DD形式、日本時間基準)
 function getTodayKey() {
@@ -28,6 +29,11 @@ function isXUrl(url) {
 
 // 使用時間を1秒増やす
 async function incrementUsage() {
+  // ポップアップが開いている場合はカウントしない
+  if (isPopupOpen) {
+    return;
+  }
+
   const today = getTodayKey();
   const currentHour = getCurrentHourJST();
   const result = await chrome.storage.local.get(['usage']);
@@ -147,10 +153,24 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 
 // 拡張機能がインストールされた時の初期設定
 chrome.runtime.onInstalled.addListener(async (details) => {
-  // アップデートの場合は既存データを削除
-  if (details.reason === 'update') {
-    await chrome.storage.local.set({ usage: {} });
-    console.log('時間別記録に更新 - 既存データ削除');
+  // 旧データ形式（数値）を新形式（配列）に移行
+  if (details.reason === 'update' || details.reason === 'install') {
+    const result = await chrome.storage.local.get(['usage']);
+    const usage = result.usage || {};
+
+    // データ形式をチェック：旧形式（数値）が含まれている場合のみ削除
+    let hasOldFormat = false;
+    for (const date in usage) {
+      if (typeof usage[date] === 'number') {
+        hasOldFormat = true;
+        break;
+      }
+    }
+
+    if (hasOldFormat) {
+      await chrome.storage.local.set({ usage: {} });
+      console.log('旧データ形式を検出 - データをリセット');
+    }
   }
 
   const result = await chrome.storage.local.get(['dailyLimit']);
@@ -207,6 +227,19 @@ chrome.idle.onStateChanged.addListener((newState) => {
     isSystemIdle = false;
     // Xタブがアクティブな場合は、カウントを再開
     checkActiveTab();
+  }
+});
+
+// ポップアップの開閉を検知
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name === 'popup') {
+    isPopupOpen = true;
+    console.log('ポップアップが開かれました - カウント停止');
+
+    port.onDisconnect.addListener(() => {
+      isPopupOpen = false;
+      console.log('ポップアップが閉じられました - カウント再開');
+    });
   }
 });
 
