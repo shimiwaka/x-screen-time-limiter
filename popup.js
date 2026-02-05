@@ -22,6 +22,28 @@ function getTodayKey() {
   return jstDate.toISOString().split('T')[0];
 }
 
+// 今月の年月を取得 (YYYY-MM形式、日本時間基準)
+function getCurrentMonthKey() {
+  const now = new Date();
+  const jstOffset = 9 * 60 * 60 * 1000;
+  const jstDate = new Date(now.getTime() + jstOffset);
+  return jstDate.toISOString().slice(0, 7);
+}
+
+// 先月の年月を取得 (YYYY-MM形式、日本時間基準)
+function getLastMonthKey() {
+  const now = new Date();
+  const jstOffset = 9 * 60 * 60 * 1000;
+  const jstDate = new Date(now.getTime() + jstOffset);
+  const year = jstDate.getUTCFullYear();
+  const month = jstDate.getUTCMonth(); // 0-indexed
+
+  if (month === 0) {
+    return `${year - 1}-12`;
+  }
+  return `${year}-${String(month).padStart(2, '0')}`;
+}
+
 // 使用状況を更新
 async function updateUsageDisplay() {
   const today = getTodayKey();
@@ -45,11 +67,51 @@ async function updateUsageDisplay() {
   document.getElementById('remainingTime').textContent = formatTime(remainingSeconds);
   document.getElementById('usedTime').textContent = formatTime(todayUsage);
 
+  // 月別平均を計算して表示
+  updateMonthlyAverages(usage);
+
   // 制限時間を入力欄に表示（フォーカスされていない場合のみ）
   const dailyLimitInput = document.getElementById('dailyLimit');
   if (document.activeElement !== dailyLimitInput) {
     dailyLimitInput.value = dailyLimit;
   }
+}
+
+// 月別平均を計算して表示
+function updateMonthlyAverages(usage) {
+  const thisMonthKey = getCurrentMonthKey();
+  const lastMonthKey = getLastMonthKey();
+
+  const thisMonthAvg = calculateMonthlyAverage(usage, thisMonthKey);
+  const lastMonthAvg = calculateMonthlyAverage(usage, lastMonthKey);
+
+  document.getElementById('thisMonthAvg').textContent =
+    thisMonthAvg !== null ? `${thisMonthAvg}分` : 'データなし';
+  document.getElementById('lastMonthAvg').textContent =
+    lastMonthAvg !== null ? `${lastMonthAvg}分` : 'データなし';
+}
+
+// 特定の月の平均使用時間を計算（分単位で返す）
+function calculateMonthlyAverage(usage, monthKey) {
+  // monthKeyに一致する日付のデータを取得
+  const matchingDates = Object.keys(usage).filter(date => date.startsWith(monthKey));
+
+  if (matchingDates.length === 0) {
+    return null;
+  }
+
+  let totalSeconds = 0;
+  for (const date of matchingDates) {
+    const dayData = usage[date];
+    if (Array.isArray(dayData)) {
+      totalSeconds += dayData.reduce((sum, val) => sum + val, 0);
+    } else {
+      totalSeconds += dayData; // レガシー形式
+    }
+  }
+
+  const avgSeconds = totalSeconds / matchingDates.length;
+  return Math.round(avgSeconds / 60);
 }
 
 // 使用履歴を表示（展開可能）
