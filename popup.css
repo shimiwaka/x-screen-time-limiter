@@ -265,6 +265,33 @@ h2 {
   color: #1DA1F2;
 }
 
+.sync-status {
+  font-size: 13px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background-color: #f7f9fa;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.sync-status.ok { background-color: #d1fae5; color: #065f46; }
+.sync-status.error { background-color: #fee2e2; color: #991b1b; }
+.sync-status.warning { background-color: #fef3c7; color: #92400e; }
+.sync-status.off { color: #999; }
+
+.sync-btn {
+  padding: 6px 12px;
+  background-color: #f7f9fa;
+  color: #555;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.sync-btn:hover { background-color: #e1e8ed; }
+.sync-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
 .legacy-notice {
   padding: 8px;
   color: #999;

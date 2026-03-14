@@ -243,5 +243,81 @@ chrome.runtime.onConnect.addListener((port) => {
   }
 });
 
+// ---- サーバー同期 ----
+
+const SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5分
+
+async function getSyncSettings() {
+  const result = await chrome.storage.local.get(['syncToken', 'apiBaseUrl']);
+  return {
+    token: result.syncToken || '',
+    baseUrl: (result.apiBaseUrl || '').replace(/\/$/, '')
+  };
+}
+
+async function syncWithServer() {
+  const { syncEnabled } = await chrome.storage.local.get(['syncEnabled']);
+  if (!syncEnabled) return;
+
+  const { token, baseUrl } = await getSyncSettings();
+  if (!token || !baseUrl) return;
+
+  const result = await chrome.storage.local.get(['usage']);
+  const localUsage = result.usage || {};
+
+  try {
+    const response = await fetch(`${baseUrl}/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, usage: localUsage })
+    });
+
+    if (!response.ok) throw new Error(`Server returned ${response.status}`);
+
+    const data = await response.json();
+    const serverUsage = data.usage || {};
+
+    const mergedUsage = { ...localUsage };
+    for (const date in serverUsage) {
+      if (!mergedUsage[date]) mergedUsage[date] = new Array(24).fill(0);
+      for (let h = 0; h < 24; h++) {
+        mergedUsage[date][h] = Math.max(mergedUsage[date][h] || 0, serverUsage[date][h] || 0);
+      }
+    }
+
+    await chrome.storage.local.set({ usage: mergedUsage, lastSyncTime: Date.now(), lastSyncError: null });
+  } catch (error) {
+    await chrome.storage.local.set({ lastSyncError: error.message });
+  }
+}
+
+setInterval(syncWithServer, SYNC_INTERVAL_MS);
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'SYNC_NOW') {
+    (async () => {
+      await syncWithServer();
+      const result = await chrome.storage.local.get(['lastSyncTime', 'lastSyncError']);
+      sendResponse({ lastSyncTime: result.lastSyncTime || null, lastSyncError: result.lastSyncError || null });
+    })();
+    return true;
+  }
+
+  if (message.type === 'GET_SYNC_STATUS') {
+    (async () => {
+      const result = await chrome.storage.local.get(['lastSyncTime', 'lastSyncError', 'syncToken', 'apiBaseUrl', 'syncEnabled']);
+      sendResponse({
+        lastSyncTime: result.lastSyncTime || null,
+        lastSyncError: result.lastSyncError || null,
+        configured: !!(result.syncToken && result.apiBaseUrl),
+        syncEnabled: !!result.syncEnabled
+      });
+    })();
+    return true;
+  }
+});
+
 // 初期チェック
 checkActiveTab();
+// 起動時に同期を試みる
+syncWithServer();

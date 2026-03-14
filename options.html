@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>設定 - X Screen Time Limiter</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="container">
+    <h1>X Screen Time Limiter - 設定</h1>
+
+    <div class="section">
+      <h2>複数端末の同期設定</h2>
+      <p class="description">
+        複数の端末でX使用時間を共有するには、すべての端末で同じトークンとAPIベースURLを設定してください。
+      </p>
+
+      <div class="form-group toggle-group">
+        <label class="toggle-label">
+          <span>同期を有効にする</span>
+          <input type="checkbox" id="syncEnabled" role="switch">
+        </label>
+      </div>
+
+      <div class="form-group">
+        <label for="apiBaseUrl">APIベースURL</label>
+        <input type="url" id="apiBaseUrl" placeholder="https://example.sakura.ne.jp/screentimelimiter">
+        <p class="hint">例: https://example.sakura.ne.jp/screentimelimiter/index.cgi<br>ブラウザで <code>（URL）?action=ping</code> にアクセスして動作確認できます</p>
+      </div>
+
+      <div class="form-group">
+        <label for="syncToken">同期トークン</label>
+        <div class="token-input-row">
+          <input type="text" id="syncToken" placeholder="ランダムなトークン文字列">
+          <button id="generateToken" class="btn-secondary">生成</button>
+        </div>
+        <p class="hint">同じトークンを設定した端末間でデータが共有されます。他人に見せないでください。</p>
+      </div>
+
+      <button id="saveSettings" class="btn-primary">設定を保存</button>
+      <div id="saveMessage" class="message"></div>
+    </div>
+
+    <div class="section">
+      <h2>同期状態</h2>
+      <div id="syncStatusDetail" class="status-box">読み込み中...</div>
+      <button id="syncNowBtn" class="btn-secondary" style="margin-top: 12px;">今すぐ同期</button>
+    </div>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>

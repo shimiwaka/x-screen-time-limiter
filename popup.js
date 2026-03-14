@@ -272,6 +272,40 @@ async function saveDailyLimit() {
   updateUsageDisplay();
 }
 
+// 同期ステータスを表示
+async function updateSyncStatus() {
+  const statusEl = document.getElementById('syncStatus');
+  const syncBtn = document.getElementById('syncNowBtn');
+  try {
+    const status = await chrome.runtime.sendMessage({ type: 'GET_SYNC_STATUS' });
+    if (!status.syncEnabled) {
+      statusEl.textContent = '同期: 無効';
+      statusEl.className = 'sync-status off';
+      syncBtn.style.display = 'none';
+      return;
+    }
+    syncBtn.style.display = 'inline-block';
+    if (!status.configured) {
+      statusEl.textContent = '同期: 未設定';
+      statusEl.className = 'sync-status warning';
+    } else if (status.lastSyncError) {
+      statusEl.textContent = `同期エラー: ${status.lastSyncError}`;
+      statusEl.className = 'sync-status error';
+    } else if (status.lastSyncTime) {
+      const date = new Date(status.lastSyncTime);
+      statusEl.textContent = `最終同期: ${date.toLocaleTimeString('ja-JP')}`;
+      statusEl.className = 'sync-status ok';
+    } else {
+      statusEl.textContent = '同期: 未実行';
+      statusEl.className = 'sync-status warning';
+    }
+  } catch (e) {
+    statusEl.textContent = '同期: 無効';
+    statusEl.className = 'sync-status off';
+    syncBtn.style.display = 'none';
+  }
+}
+
 // イベントリスナーを設定
 document.addEventListener('DOMContentLoaded', () => {
   // ポップアップが開いていることをbackground.jsに通知
@@ -279,6 +313,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
   updateUsageDisplay();
   updateHistoryDisplay();
+  updateSyncStatus();
+
+  document.getElementById('openOptions').addEventListener('click', (e) => {
+    e.preventDefault();
+    chrome.runtime.openOptionsPage();
+  });
+
+  document.getElementById('syncNowBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('syncNowBtn');
+    btn.disabled = true;
+    btn.textContent = '同期中...';
+    await chrome.runtime.sendMessage({ type: 'SYNC_NOW' });
+    await updateSyncStatus();
+    btn.disabled = false;
+    btn.textContent = '今すぐ同期';
+  });
 
   document.getElementById('saveButton').addEventListener('click', saveDailyLimit);
 
