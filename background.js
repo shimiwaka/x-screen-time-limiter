@@ -36,8 +36,9 @@ async function incrementUsage() {
 
   const today = getTodayKey();
   const currentHour = getCurrentHourJST();
-  const result = await chrome.storage.local.get(['usage']);
+  const result = await chrome.storage.local.get(['usage', 'deletedHours']);
   const usage = result.usage || {};
+  const deletedHours = result.deletedHours || {};
 
   // 配列の初期化
   if (!usage[today]) {
@@ -52,7 +53,15 @@ async function incrementUsage() {
   // 現在の時間帯をインクリメント
   usage[today][currentHour] = (usage[today][currentHour] || 0) + 1;
 
-  await chrome.storage.local.set({ usage });
+  // 新たに使用記録が追加された時間はdeleted扱いを解除
+  const updates = { usage };
+  if (deletedHours[today]) {
+    deletedHours[today] = deletedHours[today].filter(h => h !== currentHour);
+    if (deletedHours[today].length === 0) delete deletedHours[today];
+    updates.deletedHours = deletedHours;
+  }
+
+  await chrome.storage.local.set(updates);
 
   // コンテンツスクリプトには日別合計を送信
   const todayTotal = usage[today].reduce((sum, val) => sum + val, 0);
@@ -262,14 +271,15 @@ async function syncWithServer() {
   const { token, baseUrl } = await getSyncSettings();
   if (!token || !baseUrl) return;
 
-  const result = await chrome.storage.local.get(['usage']);
+  const result = await chrome.storage.local.get(['usage', 'deletedHours']);
   const localUsage = result.usage || {};
+  const deletedHours = result.deletedHours || {};
 
   try {
     const response = await fetch(`${baseUrl}/sync`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, usage: localUsage })
+      body: JSON.stringify({ token, usage: localUsage, deletedHours })
     });
 
     if (!response.ok) throw new Error(`Server returned ${response.status}`);
