@@ -226,19 +226,28 @@ async function deleteSelectedHours(date) {
     return;
   }
 
+  // 削除する時間帯を記録（同期による復元を防ぐため）
+  const deletedResult = await chrome.storage.local.get(['deletedHours']);
+  const deletedHours = deletedResult.deletedHours || {};
+  if (!deletedHours[date]) deletedHours[date] = [];
+
   // 選択された時間を0にする
   checkboxes.forEach(cb => {
     const hour = parseInt(cb.dataset.hour);
     usage[date][hour] = 0;
+    if (!deletedHours[date].includes(hour)) {
+      deletedHours[date].push(hour);
+    }
   });
 
   // 全ての時間が0なら日付ごと削除
   const hasAnyData = usage[date].some(val => val > 0);
   if (!hasAnyData) {
     delete usage[date];
+    deletedHours[date] = Array.from({ length: 24 }, (_, i) => i);
   }
 
-  await chrome.storage.local.set({ usage });
+  await chrome.storage.local.set({ usage, deletedHours });
 
   updateUsageDisplay();
   updateHistoryDisplay();
