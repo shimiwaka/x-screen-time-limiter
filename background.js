@@ -296,8 +296,6 @@ async function syncWithServer() {
     }
 
     // 削除済み時間帯を再適用（サーバーからの復元を防ぐ）
-    const deletedResult = await chrome.storage.local.get(['deletedHours']);
-    const deletedHours = deletedResult.deletedHours || {};
     for (const date in deletedHours) {
       if (mergedUsage[date]) {
         deletedHours[date].forEach(h => { mergedUsage[date][h] = 0; });
