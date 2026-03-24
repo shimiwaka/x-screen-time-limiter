@@ -216,6 +216,11 @@ h2 {
   color: #666;
 }
 
+.hourly-header-actions {
+  display: flex;
+  gap: 6px;
+}
+
 .delete-hours-btn {
   padding: 4px 8px;
   background-color: #DC2626;
@@ -229,6 +234,22 @@ h2 {
 
 .delete-hours-btn:hover {
   background-color: #b91c1c;
+}
+
+.delete-day-btn {
+  padding: 4px 8px;
+  background-color: white;
+  color: #DC2626;
+  border: 1px solid #DC2626;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.delete-day-btn:hover {
+  background-color: #DC2626;
+  color: white;
 }
 
 .hourly-list {

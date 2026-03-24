@@ -162,7 +162,10 @@ async function updateHistoryDisplay() {
       detailsDiv.innerHTML = `
         <div class="hourly-header">
           <span>時間帯別の使用時間</span>
-          <button class="delete-hours-btn" data-date="${date}">選択した時間を削除</button>
+          <div class="hourly-header-actions">
+            <button class="delete-hours-btn" data-date="${date}">選択した時間を削除</button>
+            <button class="delete-day-btn" data-date="${date}">この日を全部削除</button>
+          </div>
         </div>
         <div class="hourly-list">
           ${dayData.map((seconds, hour) => {
@@ -200,6 +203,14 @@ async function updateHistoryDisplay() {
       e.stopPropagation();
       const date = btn.dataset.date;
       await deleteSelectedHours(date);
+    });
+  });
+
+  document.querySelectorAll('.delete-day-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const date = btn.dataset.date;
+      await deleteDayAllHours(date);
     });
   });
 }
@@ -246,6 +257,28 @@ async function deleteSelectedHours(date) {
     delete usage[date];
     deletedHours[date] = Array.from({ length: 24 }, (_, i) => i);
   }
+
+  await chrome.storage.local.set({ usage, deletedHours });
+
+  updateUsageDisplay();
+  updateHistoryDisplay();
+}
+
+// 日付を丸ごと削除（全時間を0にして日付エントリを削除）
+async function deleteDayAllHours(date) {
+  if (!confirm(`${formatDate(date)}のデータを全て削除しますか？`)) {
+    return;
+  }
+
+  const result = await chrome.storage.local.get(['usage', 'deletedHours']);
+  const usage = result.usage || {};
+  const deletedHours = result.deletedHours || {};
+
+  // 全時間帯を削除済みとして記録（同期による復元を防ぐため）
+  deletedHours[date] = Array.from({ length: 24 }, (_, i) => i);
+
+  // 日付ごと削除
+  delete usage[date];
 
   await chrome.storage.local.set({ usage, deletedHours });
 
