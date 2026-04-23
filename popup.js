@@ -215,6 +215,13 @@ async function updateHistoryDisplay() {
   });
 }
 
+// 現在時刻（JST）のUnixタイムスタンプ（ミリ秒）を取得
+function getNowJST() {
+  const now = new Date();
+  const jstOffset = 9 * 60 * 60 * 1000;
+  return now.getTime() + jstOffset;
+}
+
 // 選択された時間を削除
 async function deleteSelectedHours(date) {
   // 該当する日付の詳細エリア内のチェックされたチェックボックスを取得
@@ -230,35 +237,35 @@ async function deleteSelectedHours(date) {
     return;
   }
 
-  const result = await chrome.storage.local.get(['usage']);
+  const result = await chrome.storage.local.get(['usage', 'deletedAt']);
   const usage = result.usage || {};
+  const deletedAt = result.deletedAt || {};
 
   if (!usage[date] || !Array.isArray(usage[date])) {
     return;
   }
 
-  // 削除する時間帯を記録（同期による復元を防ぐため）
-  const deletedResult = await chrome.storage.local.get(['deletedHours']);
-  const deletedHours = deletedResult.deletedHours || {};
-  if (!deletedHours[date]) deletedHours[date] = [];
+  if (!deletedAt[date]) deletedAt[date] = {};
 
-  // 選択された時間を0にする
+  const nowJst = getNowJST();
+
+  // 選択された時間を0にし、削除時刻を記録
   checkboxes.forEach(cb => {
     const hour = parseInt(cb.dataset.hour);
     usage[date][hour] = 0;
-    if (!deletedHours[date].includes(hour)) {
-      deletedHours[date].push(hour);
-    }
+    deletedAt[date][hour] = nowJst;
   });
 
   // 全ての時間が0なら日付ごと削除
   const hasAnyData = usage[date].some(val => val > 0);
   if (!hasAnyData) {
     delete usage[date];
-    deletedHours[date] = Array.from({ length: 24 }, (_, i) => i);
+    for (let h = 0; h < 24; h++) {
+      deletedAt[date][h] = nowJst;
+    }
   }
 
-  await chrome.storage.local.set({ usage, deletedHours });
+  await chrome.storage.local.set({ usage, deletedAt });
 
   updateUsageDisplay();
   updateHistoryDisplay();
@@ -270,17 +277,23 @@ async function deleteDayAllHours(date) {
     return;
   }
 
-  const result = await chrome.storage.local.get(['usage', 'deletedHours']);
+  const result = await chrome.storage.local.get(['usage', 'deletedAt']);
   const usage = result.usage || {};
-  const deletedHours = result.deletedHours || {};
+  const deletedAt = result.deletedAt || {};
 
-  // 全時間帯を削除済みとして記録（同期による復元を防ぐため）
-  deletedHours[date] = Array.from({ length: 24 }, (_, i) => i);
+  const nowJst = getNowJST();
+
+  // 全時間帯の削除時刻を記録（同期による復元を防ぐため）
+  const hourMap = {};
+  for (let h = 0; h < 24; h++) {
+    hourMap[h] = nowJst;
+  }
+  deletedAt[date] = hourMap;
 
   // 日付ごと削除
   delete usage[date];
 
-  await chrome.storage.local.set({ usage, deletedHours });
+  await chrome.storage.local.set({ usage, deletedAt });
 
   updateUsageDisplay();
   updateHistoryDisplay();

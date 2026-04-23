@@ -4,6 +4,13 @@ let countInterval = null;
 let isSystemIdle = false; // システムがアイドル/スリープ状態かどうか
 let isPopupOpen = false; // ポップアップが開いているかどうか
 
+// 現在時刻（JST）のUnixタイムスタンプ（ミリ秒）を取得
+function getNowJST() {
+  const now = new Date();
+  const jstOffset = 9 * 60 * 60 * 1000;
+  return now.getTime() + jstOffset;
+}
+
 // 今日の日付を取得 (YYYY-MM-DD形式、日本時間基準)
 function getTodayKey() {
   const now = new Date();
@@ -36,9 +43,9 @@ async function incrementUsage() {
 
   const today = getTodayKey();
   const currentHour = getCurrentHourJST();
-  const result = await chrome.storage.local.get(['usage', 'deletedHours']);
+  const result = await chrome.storage.local.get(['usage', 'deletedAt']);
   const usage = result.usage || {};
-  const deletedHours = result.deletedHours || {};
+  const deletedAt = result.deletedAt || {};
 
   // 配列の初期化
   if (!usage[today]) {
@@ -53,12 +60,17 @@ async function incrementUsage() {
   // 現在の時間帯をインクリメント
   usage[today][currentHour] = (usage[today][currentHour] || 0) + 1;
 
-  // 新たに使用記録が追加された時間はdeleted扱いを解除
+  // 削除時刻より後に記録されたデータは削除扱いを解除
   const updates = { usage };
-  if (deletedHours[today]) {
-    deletedHours[today] = deletedHours[today].filter(h => h !== currentHour);
-    if (deletedHours[today].length === 0) delete deletedHours[today];
-    updates.deletedHours = deletedHours;
+  const nowJst = getNowJST();
+  if (deletedAt[today] && deletedAt[today][currentHour] !== undefined) {
+    // 削除時刻より後にデータが記録された → 削除マークを解除
+    if (nowJst > deletedAt[today][currentHour]) {
+      delete deletedAt[today][currentHour];
+      const remaining = Object.keys(deletedAt[today]);
+      if (remaining.length === 0) delete deletedAt[today];
+      updates.deletedAt = deletedAt;
+    }
   }
 
   await chrome.storage.local.set(updates);
@@ -271,38 +283,44 @@ async function syncWithServer() {
   const { token, baseUrl } = await getSyncSettings();
   if (!token || !baseUrl) return;
 
-  const result = await chrome.storage.local.get(['usage', 'deletedHours']);
+  const result = await chrome.storage.local.get(['usage', 'deletedAt']);
   const localUsage = result.usage || {};
-  const localDeletedHours = result.deletedHours || {};
+  const localDeletedAt = result.deletedAt || {};
 
   try {
     const response = await fetch(`${baseUrl}/sync`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, usage: localUsage, deletedHours: localDeletedHours })
+      body: JSON.stringify({ token, usage: localUsage, deletedAt: localDeletedAt })
     });
 
     if (!response.ok) throw new Error(`Server returned ${response.status}`);
 
     const data = await response.json();
-    // サーバーはすべての端末の deletedHours を累積して返す
-    // （サーバーが deletedHours を返さない旧バージョンとの互換性のためフォールバック）
     const serverUsage = data.usage || {};
-    const serverDeletedHours = data.deletedHours || localDeletedHours;
+    const serverDeletedAt = data.deletedAt || {};
 
-    // すべての端末の削除情報をマージ（union）
-    const mergedDeletedHours = { ...localDeletedHours };
-    for (const date in serverDeletedHours) {
-      if (!mergedDeletedHours[date]) {
-        mergedDeletedHours[date] = [...serverDeletedHours[date]];
+    // すべての端末の削除情報をマージ（hourごとに最も古い削除時刻を採用）
+    const mergedDeletedAt = { ...localDeletedAt };
+    for (const date in serverDeletedAt) {
+      if (!mergedDeletedAt[date]) {
+        mergedDeletedAt[date] = { ...serverDeletedAt[date] };
       } else {
-        const combined = new Set([...mergedDeletedHours[date], ...serverDeletedHours[date]]);
-        mergedDeletedHours[date] = [...combined];
+        for (const hour in serverDeletedAt[date]) {
+          if (mergedDeletedAt[date][hour] === undefined) {
+            mergedDeletedAt[date][hour] = serverDeletedAt[date][hour];
+          } else {
+            // より古い（小さい）削除時刻を採用
+            mergedDeletedAt[date][hour] = Math.min(
+              mergedDeletedAt[date][hour],
+              serverDeletedAt[date][hour]
+            );
+          }
+        }
       }
     }
 
-    // サーバーはローカルデータを含めてマージ済みの usage を返すので、
-    // それをベースにローカルの削除情報を適用する
+    // usage をマージ（各端末の最大値を採用）
     const mergedUsage = {};
     const allDates = new Set([...Object.keys(localUsage), ...Object.keys(serverUsage)]);
     for (const date of allDates) {
@@ -315,19 +333,13 @@ async function syncWithServer() {
       }
     }
 
-    // すべての端末の削除情報を適用（他端末での削除も反映）
-    for (const date in mergedDeletedHours) {
-      if (mergedUsage[date]) {
-        mergedDeletedHours[date].forEach(h => { mergedUsage[date][h] = 0; });
-        if (!mergedUsage[date].some(v => v > 0)) {
-          delete mergedUsage[date];
-        }
-      }
-    }
+    // 削除情報を適用：削除時刻より後に記録されたデータは保持するため、
+    // 削除済み時間帯は Math.max の結果をそのまま使う（強制ゼロにしない）
+    // これにより、端末Aで削除した時間帯でも端末Bで使った新しいデータは残る
 
     await chrome.storage.local.set({
       usage: mergedUsage,
-      deletedHours: mergedDeletedHours,
+      deletedAt: mergedDeletedAt,
       lastSyncTime: Date.now(),
       lastSyncError: null
     });
