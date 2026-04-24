@@ -320,22 +320,22 @@ async function syncWithServer() {
       }
     }
 
-    // usage をマージ（各端末の最大値を採用）
+    // usage をマージ（各端末の最大値を採用、削除マークがある時間帯はゼロ化）
     const mergedUsage = {};
     const allDates = new Set([...Object.keys(localUsage), ...Object.keys(serverUsage)]);
     for (const date of allDates) {
       mergedUsage[date] = new Array(24).fill(0);
       for (let h = 0; h < 24; h++) {
-        mergedUsage[date][h] = Math.max(
-          (localUsage[date] || [])[h] || 0,
-          (serverUsage[date] || [])[h] || 0
-        );
+        if (mergedDeletedAt[date] && mergedDeletedAt[date][h] !== undefined) {
+          mergedUsage[date][h] = 0;
+        } else {
+          mergedUsage[date][h] = Math.max(
+            (localUsage[date] || [])[h] || 0,
+            (serverUsage[date] || [])[h] || 0
+          );
+        }
       }
     }
-
-    // 削除情報を適用：削除時刻より後に記録されたデータは保持するため、
-    // 削除済み時間帯は Math.max の結果をそのまま使う（強制ゼロにしない）
-    // これにより、端末Aで削除した時間帯でも端末Bで使った新しいデータは残る
 
     await chrome.storage.local.set({
       usage: mergedUsage,
