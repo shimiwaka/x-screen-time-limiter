@@ -271,7 +271,7 @@ async function deleteSelectedHours(date) {
   updateHistoryDisplay();
 }
 
-// 日付を丸ごと削除（全時間を0にして日付エントリを削除）
+// 日付を丸ごと削除
 async function deleteDayAllHours(date) {
   if (!confirm(`${formatDate(date)}のデータを全て削除しますか？`)) {
     return;
@@ -281,17 +281,9 @@ async function deleteDayAllHours(date) {
   const usage = result.usage || {};
   const deletedAt = result.deletedAt || {};
 
-  const nowJst = getNowJST();
-
-  // 全時間帯の削除時刻を記録（同期による復元を防ぐため）
-  const hourMap = {};
-  for (let h = 0; h < 24; h++) {
-    hourMap[h] = nowJst;
-  }
-  deletedAt[date] = hourMap;
-
-  // 日付ごと削除
+  // 日付のエントリのみ削除。deletedAt は記録しない（後続の記録に影響させないため）
   delete usage[date];
+  delete deletedAt[date];
 
   await chrome.storage.local.set({ usage, deletedAt });
 
