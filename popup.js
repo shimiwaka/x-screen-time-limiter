@@ -281,9 +281,13 @@ async function deleteDayAllHours(date) {
   const usage = result.usage || {};
   const deletedAt = result.deletedAt || {};
 
-  // 日付のエントリのみ削除。deletedAt は記録しない（後続の記録に影響させないため）
+  // 全 hour に削除時刻を記録（同期時に他端末の古いデータが復活するのを防ぐ）
+  const nowJst = getNowJST();
   delete usage[date];
-  delete deletedAt[date];
+  deletedAt[date] = {};
+  for (let h = 0; h < 24; h++) {
+    deletedAt[date][h] = nowJst;
+  }
 
   await chrome.storage.local.set({ usage, deletedAt });
 

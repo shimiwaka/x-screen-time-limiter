@@ -43,9 +43,8 @@ async function incrementUsage() {
 
   const today = getTodayKey();
   const currentHour = getCurrentHourJST();
-  const result = await chrome.storage.local.get(['usage', 'deletedAt']);
+  const result = await chrome.storage.local.get(['usage']);
   const usage = result.usage || {};
-  const deletedAt = result.deletedAt || {};
 
   // 配列の初期化
   if (!usage[today]) {
@@ -57,23 +56,10 @@ async function incrementUsage() {
     usage[today] = new Array(24).fill(0);
   }
 
-  // 現在の時間帯をインクリメント
+  // usage[h] は deletedAt[h] 以降の累積秒数。削除マークは解除しない。
   usage[today][currentHour] = (usage[today][currentHour] || 0) + 1;
 
-  // 削除時刻より後に記録されたデータは削除扱いを解除
-  const updates = { usage };
-  const nowJst = getNowJST();
-  if (deletedAt[today] && deletedAt[today][currentHour] !== undefined) {
-    // 削除時刻より後にデータが記録された → 削除マークを解除
-    if (nowJst > deletedAt[today][currentHour]) {
-      delete deletedAt[today][currentHour];
-      const remaining = Object.keys(deletedAt[today]);
-      if (remaining.length === 0) delete deletedAt[today];
-      updates.deletedAt = deletedAt;
-    }
-  }
-
-  await chrome.storage.local.set(updates);
+  await chrome.storage.local.set({ usage });
 
   // コンテンツスクリプトには日別合計を送信
   const todayTotal = usage[today].reduce((sum, val) => sum + val, 0);
@@ -300,40 +286,34 @@ async function syncWithServer() {
     const serverUsage = data.usage || {};
     const serverDeletedAt = data.deletedAt || {};
 
-    // すべての端末の削除情報をマージ（hourごとに最も古い削除時刻を採用）
-    const mergedDeletedAt = { ...localDeletedAt };
-    for (const date in serverDeletedAt) {
-      if (!mergedDeletedAt[date]) {
-        mergedDeletedAt[date] = { ...serverDeletedAt[date] };
-      } else {
-        for (const hour in serverDeletedAt[date]) {
-          if (mergedDeletedAt[date][hour] === undefined) {
-            mergedDeletedAt[date][hour] = serverDeletedAt[date][hour];
-          } else {
-            // より古い（小さい）削除時刻を採用
-            mergedDeletedAt[date][hour] = Math.min(
-              mergedDeletedAt[date][hour],
-              serverDeletedAt[date][hour]
-            );
-          }
-        }
-      }
-    }
-
-    // usage をマージ（各端末の最大値を採用、削除マークがある時間帯はゼロ化）
+    // hour 単位 (deletedAt, value) マージ: deletedAt は max、value は新しい deletedAt 側のみ採用候補にして max。
+    const mergedDeletedAt = {};
     const mergedUsage = {};
-    const allDates = new Set([...Object.keys(localUsage), ...Object.keys(serverUsage)]);
+    const allDates = new Set([
+      ...Object.keys(localUsage),
+      ...Object.keys(serverUsage),
+      ...Object.keys(localDeletedAt),
+      ...Object.keys(serverDeletedAt)
+    ]);
+
     for (const date of allDates) {
       mergedUsage[date] = new Array(24).fill(0);
+      const dateDeletedAt = {};
       for (let h = 0; h < 24; h++) {
-        if (mergedDeletedAt[date] && mergedDeletedAt[date][h] !== undefined) {
-          mergedUsage[date][h] = 0;
-        } else {
-          mergedUsage[date][h] = Math.max(
-            (localUsage[date] || [])[h] || 0,
-            (serverUsage[date] || [])[h] || 0
-          );
-        }
+        const localDel = (localDeletedAt[date] || {})[h] || 0;
+        const serverDel = (serverDeletedAt[date] || {})[h] || 0;
+        const mergedDel = Math.max(localDel, serverDel);
+        if (mergedDel > 0) dateDeletedAt[h] = mergedDel;
+
+        const localVal = (localUsage[date] || [])[h] || 0;
+        const serverVal = (serverUsage[date] || [])[h] || 0;
+        let val = 0;
+        if (localDel >= serverDel) val = Math.max(val, localVal);
+        if (serverDel >= localDel) val = Math.max(val, serverVal);
+        mergedUsage[date][h] = val;
+      }
+      if (Object.keys(dateDeletedAt).length > 0) {
+        mergedDeletedAt[date] = dateDeletedAt;
       }
     }
 
